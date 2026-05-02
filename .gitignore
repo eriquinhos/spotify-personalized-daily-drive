@@ -1,5 +1,8 @@
 .venv
 .env
 .idea
-app.log
-spotify-daily-drive
+*.egg-info
+__pycache__
+*.log
+.cache
+.vscode
