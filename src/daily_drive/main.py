@@ -1,4 +1,5 @@
-from random import choice, shuffle
+from random import shuffle
+from secrets import choice
 
 import spotipy
 
@@ -101,6 +102,7 @@ def main() -> None:
     result = playlist_service.create_daily_drive_playlist(
         tracks, podcast_episodes)
     log.info(result)
+
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,6 @@
+import base64
 from pathlib import Path
 from typing import ClassVar
-import base64
 
 import spotipy
 
@@ -92,7 +92,6 @@ class PlaylistService:
 
     import base64
 
-
     def _add_image_to_playlist(self, playlist_id: str, image_path: str) -> str:
         try:
             with open(image_path, "rb") as img_file:
@@ -100,11 +99,12 @@ class PlaylistService:
             # Convert to base64 bytes
             img_b64 = base64.b64encode(img_data)
             self.sp.playlist_upload_cover_image(playlist_id, img_b64)
-            return f"Image '{image_path}' uploaded successfully to playlist ID: {playlist_id}"
         except FileNotFoundError:
             return f"Image file '{image_path}' not found."
         except spotipy.SpotifyException as e:
             return f"Error uploading image to playlist: {e}"
+        else:
+            return f"Image '{image_path}' uploaded successfully to playlist ID: {playlist_id}"
 
     def _build_structured_uris(
         self,
@@ -221,7 +221,8 @@ class PlaylistService:
                 url=playlist_data["external_urls"]["spotify"]
             )
             self._add_image_to_playlist(playlist_data["id"], str(image_path))
-            self._add_structured_content_to_playlist(playlist, tracks, episodes)
+            self._add_structured_content_to_playlist(
+                playlist, tracks, episodes)
             return f"Playlist '{playlist_name}' created successfully with ID: {playlist_data['id']}"
         except spotipy.SpotifyException as e:
             return f"Error creating playlist: {e}"

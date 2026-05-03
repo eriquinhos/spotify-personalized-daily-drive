@@ -389,6 +389,7 @@ dependencies = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "python-dotenv" },
+    { name = "ruff" },
     { name = "spotipy" },
 ]
 
@@ -407,6 +408,7 @@ requires-dist = [
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-xdist", marker = "extra == 'dev'" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
+    { name = "ruff", specifier = ">=0.15.12" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "spotipy", specifier = ">=2.23.0" },
 ]

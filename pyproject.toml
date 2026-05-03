@@ -32,6 +32,7 @@ dependencies = [
   "pytest>=9.0.3",
   "coverage>=7.13.5",
   "pytest-cov>=7.1.0",
+  "ruff>=0.15.12",
 ]
 [project.urls]
 Repository = "https://github.com/eriquinhos/spotify-personalized-daily-drive"
