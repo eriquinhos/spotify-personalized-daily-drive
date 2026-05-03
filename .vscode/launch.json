@@ -9,7 +9,7 @@
       "name": "Run Main",
       "type": "debugpy",
       "request": "launch",
-      "program": "src\\main.py",
+      "program": "src\\daily_drive\\main.py",
       "console": "integratedTerminal",
       "python": ".venv\\Scripts\\python.exe"
     }

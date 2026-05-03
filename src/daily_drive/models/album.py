@@ -1,15 +1,16 @@
 from dataclasses import dataclass
 
+from daily_drive.models.artist import Artist
 from daily_drive.models.track import Track
-from daily_drive.models.user import User
 
 
 @dataclass(frozen=True)
-class Playlist:
+class Album:
     id: str
     name: str
+    artists: list[Artist]
+    release_date: str
     tracks: list[Track]
-    owner: User
     uri: str
     url: str
-    public: bool = True
+    total_tracks: int | None = None

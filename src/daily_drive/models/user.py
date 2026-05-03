@@ -1,13 +1,11 @@
 from dataclasses import dataclass
 
-from daily_drive.models.podcast import Podcast
-
 
 @dataclass(frozen=True)
-class Episode:
+class User:
     id: str
     name: str
-    podcast: Podcast
-    release_date: str
     uri: str
     url: str
+    email: str | None = None
+    images: list[str] | None = None
