@@ -6,7 +6,7 @@
 ![GitHub%20Actions](https://img.shields.io/badge/-GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)
 ![uv](https://img.shields.io/badge/uv-281032?style=flat-square&logo=uv&logoColor=DE5FEa)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![License](https://img.shields.io/github/license/eriquinhos/spotify-personalized-daily-drive?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/github/license/eriquinhos/spotify-personalized-daily-drive?style=flat-square)]([LICENSE](https://github.com/eriquinhos/spotify-personalized-daily-drive/tree/master?tab=MIT-1-ov-file))
 
 > A system to create personalized daily playlists combining curated news podcasts and user-favorite songs. Runs on any machine and automatically refreshes a Spotify playlist with your podcasts intelligently interleaved with your top tracks.
 
