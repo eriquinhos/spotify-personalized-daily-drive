@@ -2,9 +2,9 @@ name: pipeline-instock
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,6 +17,7 @@ jobs:
   lint:
     name: Lint & Format Check
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -25,7 +26,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -35,16 +35,19 @@ jobs:
       - name: Sync dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Run ruff (uses config from pyproject.toml)
+      - name: Run ruff
         run: uv run ruff check .
 
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
-    needs: [ lint ]
+    needs: [lint]
+
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [ "3.11", "3.12", "3.13" ]
+        python-version: ["3.11", "3.12", "3.13"]
+
     env:
       CI: true
 
@@ -56,32 +59,34 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Sync dependencies
+        run: uv sync --frozen --extra dev
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: uv run pytest --cov=. --cov-report=term-missing
 
   notify-success:
     name: Notify Success
-    needs: test
+    needs: [test]
     runs-on: ubuntu-latest
     if: success()
+
     steps:
       - name: Send success notification
         run: echo "Pipeline completed successfully! InStock deployed to production."
 
   notify-failure:
     name: Notify Failure
+    needs: [lint, test]
     runs-on: ubuntu-latest
     if: failure()
+
     steps:
       - name: Send failure notification
         run: echo "Pipeline failed. Check the logs for details."
