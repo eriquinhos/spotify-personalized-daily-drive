@@ -23,6 +23,11 @@ jobs:
       - name: Sync dependencies
         run: uv sync --frozen
 
+      - name: Restore Spotify cache
+        run: |
+          printf '%s' '${{ secrets.SPOTIFY_CACHE }}' > .cache
+          chmod 600 .cache
+
       - name: Run Daily Drive
         env:
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
