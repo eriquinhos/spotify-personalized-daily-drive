@@ -10,6 +10,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Observability - schedule vs actual start
+        env:
+          TZ_NAME: America/Sao_Paulo
+        run: |
+          echo "=== Trigger Context ==="
+          echo "event=${{ github.event_name }}"
+          echo "cron=${{ github.event.schedule }}"
+          echo "run_id=${{ github.run_id }} attempt=${{ github.run_attempt }}"
+          echo "now_utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          echo "now_local=$(TZ=${TZ_NAME} date '+%Y-%m-%d %H:%M:%S %Z (%z)')"
+
+          now_epoch="$(date -u +%s)"
+          expected_epoch="$(date -u -d "$(date -u '+%Y-%m-%d') 09:00:00" +%s)"
+          if [ "${now_epoch}" -lt "${expected_epoch}" ]; then
+            expected_epoch="$((expected_epoch - 86400))"
+          fi
+          expected_utc="$(date -u -d "@${expected_epoch}" '+%Y-%m-%dT%H:%M:%SZ')"
+          delay_sec="$((now_epoch - expected_epoch))"
+
+          echo "expected_trigger_utc=${expected_utc}"
+          echo "queue_delay_sec=${delay_sec}"
+          echo "queue_delay_min=$((delay_sec/60))"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -33,4 +56,35 @@ jobs:
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
           SPOTIFY_REDIRECT_URI: ${{ secrets.SPOTIFY_REDIRECT_URI }}
-        run: uv run main
+        run: |
+          start_utc="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          start_epoch="$(date +%s)"
+          echo "daily_drive_start_utc=${start_utc}"
+
+          uv run main
+
+          end_utc="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          end_epoch="$(date +%s)"
+          duration_sec="$((end_epoch - start_epoch))"
+          echo "daily_drive_end_utc=${end_utc}"
+          echo "daily_drive_duration_sec=${duration_sec}"
+          echo "daily_drive_duration_min=$((duration_sec/60))"
+  notify-success:
+    name: Notify Success
+    needs: [update-playlist]
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: Send success notification
+        run: echo "Pipeline completed successfully! InStock deployed to production."
+
+  notify-failure:
+    name: Notify Failure
+    needs: [update-playlist]
+    runs-on: ubuntu-latest
+    if: failure()
+
+    steps:
+      - name: Send failure notification
+        run: echo "Pipeline failed. Check the logs for details."   
