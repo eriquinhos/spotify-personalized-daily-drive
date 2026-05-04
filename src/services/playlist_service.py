@@ -171,20 +171,21 @@ class PlaylistService:
                 episodes_by_podcast[podcast_id] = []
             episodes_by_podcast[podcast_id].append(episode)
 
-        # Determine today's welcome track (if available) and prepend it.
         welcome_uri: str | None = None
-        try:
-            welcome_tracks = self.get_spotify_daily_drive_welcome_tracks()
-            if welcome_tracks:
-                # datetime.weekday(): Monday=0 .. Sunday=6
-                # The album ordering appears to be Sunday..Saturday so shift by +1
-                weekday = datetime.now().weekday()
-                welcome_index = (weekday + 1) % 7
-                if 0 <= welcome_index < len(welcome_tracks):
-                    welcome_uri = welcome_tracks[welcome_index].uri
-        except spotipy.SpotifyException:
-            # If Spotify API call fails, continue without a welcome track
-            welcome_uri = None
+        sp_client = getattr(self, "sp", None)
+        if sp_client and hasattr(sp_client, "album_tracks") and hasattr(sp_client, "album"):
+            try:
+                welcome_tracks = self.get_spotify_daily_drive_welcome_tracks()
+                if welcome_tracks:
+                    # datetime.weekday(): Monday=0 .. Sunday=6
+                    # The album ordering appears to be Sunday..Saturday so shift by +1
+                    weekday = datetime.now().weekday()
+                    welcome_index = (weekday + 1) % 7
+                    if 0 <= welcome_index < len(welcome_tracks):
+                        welcome_uri = welcome_tracks[welcome_index].uri
+            except spotipy.SpotifyException:
+                # If Spotify API call fails, continue without a welcome track
+                welcome_uri = None
 
         structured_uris = self._build_structured_uris(
             tracks, episodes, episodes_by_podcast, welcome_uri=welcome_uri)
