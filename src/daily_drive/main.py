@@ -13,6 +13,7 @@ from services.user_service import UserService
 """
 At 6AM GMT -3, every day, the playlist must have this structure:
 [
+    HOJE É {DIA DA SEMANA},
     track,
     SEGUNDOS_123_EPISODE,
     track,

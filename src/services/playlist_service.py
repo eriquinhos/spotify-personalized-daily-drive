@@ -1,9 +1,11 @@
 import base64
+from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
 import spotipy
 
+from daily_drive.models.artist import Artist
 from daily_drive.models.episode import Episode
 from daily_drive.models.playlist import Playlist
 from daily_drive.models.podcast import Podcast
@@ -110,12 +112,20 @@ class PlaylistService:
         self,
         tracks: list[Track],
         episodes: list[Episode],
-        episodes_by_podcast: dict
+        episodes_by_podcast: dict,
+        welcome_uri: str | None = None,
     ) -> list[str]:
-        """Build the ordered list of URIs following the daily drive structure."""
-        structured_uris = []
+        """Build the ordered list of URIs following the daily drive structure.
+
+        If `welcome_uri` is provided it will be placed before the first music.
+        """
+        structured_uris: list[str] = []
         track_uris = [t.uri for t in tracks]
         track_index = 0
+
+        # Prepend welcome track if available
+        if welcome_uri:
+            structured_uris.append(welcome_uri)
 
         # Primeiro: 1 track + 1 episode
         if track_index < len(track_uris):
@@ -161,8 +171,23 @@ class PlaylistService:
                 episodes_by_podcast[podcast_id] = []
             episodes_by_podcast[podcast_id].append(episode)
 
+        # Determine today's welcome track (if available) and prepend it.
+        welcome_uri: str | None = None
+        try:
+            welcome_tracks = self.get_spotify_daily_drive_welcome_tracks()
+            if welcome_tracks:
+                # datetime.weekday(): Monday=0 .. Sunday=6
+                # The album ordering appears to be Sunday..Saturday so shift by +1
+                weekday = datetime.now().weekday()
+                welcome_index = (weekday + 1) % 7
+                if 0 <= welcome_index < len(welcome_tracks):
+                    welcome_uri = welcome_tracks[welcome_index].uri
+        except spotipy.SpotifyException:
+            # If Spotify API call fails, continue without a welcome track
+            welcome_uri = None
+
         structured_uris = self._build_structured_uris(
-            tracks, episodes, episodes_by_podcast)
+            tracks, episodes, episodes_by_podcast, welcome_uri=welcome_uri)
 
         try:
             self.sp.playlist_add_items(playlist.id, structured_uris)
@@ -226,3 +251,51 @@ class PlaylistService:
             return f"Playlist '{playlist_name}' created successfully with ID: {playlist_data['id']}"
         except spotipy.SpotifyException as e:
             return f"Error creating playlist: {e}"
+
+    def get_spotify_daily_drive_welcome_tracks(
+        self,
+        album_id: str = "56DxAA2hEm2S8Lsh1ih9Qq",  # PT default
+    ) -> list[Track]:
+        """
+        Spotify Daily Drive welcome tracks album IDs:
+        Portuguese: 56DxAA2hEm2S8Lsh1ih9Qq
+        Spanish:    2kpNmUgrzvynwA5u1q8OeV
+        """
+        results = self.sp.album_tracks(album_id=album_id, limit=50)
+        items = results.get("items", [])
+
+        # Handle pagination in case Spotify returns more than one page.
+        while results.get("next"):
+            results = self.sp.next(results)
+            items.extend(results.get("items", []))
+
+        # album_tracks gives simplified tracks; fetch album once for release_date.
+        album_data = self.sp.album(album_id)
+        release_date = album_data.get("release_date", "")
+
+        mapped_tracks: list[Track] = []
+        for t in items:
+            artists = [
+                Artist(
+                    id=a.get("id", ""),
+                    name=a.get("name", ""),
+                    uri=a.get("uri", ""),
+                    url=a.get("external_urls", {}).get("spotify", ""),
+                )
+                for a in t.get("artists", [])
+            ]
+
+            mapped_tracks.append(
+                Track(
+                    id=t.get("id", ""),
+                    name=t.get("name", ""),
+                    artists=artists,
+                    album_id=album_id,
+                    release_date=release_date,
+                    uri=t.get("uri", ""),
+                    url=t.get("external_urls", {}).get("spotify", ""),
+                    explicit=t.get("explicit", False),
+                    duration_ms=t.get("duration_ms"),
+                )
+            )
+        return mapped_tracks

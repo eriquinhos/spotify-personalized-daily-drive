@@ -9,3 +9,4 @@ __pycache__
 launch.json
 .coverage
 .pytest_cache
+.ruff_cache

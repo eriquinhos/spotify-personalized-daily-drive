@@ -53,22 +53,31 @@ class PodcastService:
 
     def _get_podcast_episodes(self, podcast: Podcast, limit: int = 5) -> list[Episode]:
         search = self.sp.show_episodes(podcast.id, limit=limit)
-        items = search.get("items", [])
+        items = search.get("items", []) or []
 
         if not items:
             return []
 
-        return [
-            Episode(
-                id=ep["id"],
-                name=ep["name"],
-                podcast=podcast,
-                release_date=ep.get("release_date", ""),
-                uri=ep.get("uri", ""),
-                url=ep.get("external_urls", {}).get("spotify", ""),
+        episodes: list[Episode] = []
+        for ep in items:
+            if not ep or not isinstance(ep, dict):
+                continue
+            ep_id = ep.get("id")
+            if not ep_id:
+                continue
+
+            episodes.append(
+                Episode(
+                    id=ep_id,
+                    name=ep.get("name", ""),
+                    podcast=podcast,
+                    release_date=ep.get("release_date", ""),
+                    uri=ep.get("uri", ""),
+                    url=ep.get("external_urls", {}).get("spotify", ""),
+                )
             )
-            for ep in items
-        ]
+
+        return episodes
 
     def get_user_top_podcasts(self, time_range: str = "short_term", limit: int = 20) -> list[Podcast]:
         top_podcasts = self.sp.current_user_top_shows(
