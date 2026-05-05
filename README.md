@@ -37,10 +37,10 @@ This tells Spotify your script is allowed to manage your playlists. It's free an
 1. Go to **[developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)** and log in with your Spotify account
 2. Click **"Create App"**
 3. Fill in the form:
-   - **App name:** `Spotify Daily Drive` (or anything)
-   - **App description:** `Personal playlist tool` (or anything)
-   - **Redirect URI:** type in exactly: `http://localhost:8080/callback` then click **Add**
-   - Check both **Web API** and **Web Playback SDK**
+    - **App name:** `Spotify Daily Drive` (or anything)
+    - **App description:** `Personal playlist tool` (or anything)
+    - **Redirect URI:** type in exactly: `http://localhost:8080/callback` then click **Add**
+    - Check both **Web API** and **Web Playback SDK**
 4. Click **"Save"**
 
 #### Finding Your Credentials
@@ -79,6 +79,47 @@ SPOTIFY_CLIENT_SECRET=your_client_secret_here
 SPOTIFY_REDIRECT_URI=http://localhost:8888/callback
 ```
 
+Create a `config.yaml` file in the project root for non-secret settings:
+
+```yaml
+daily_drive:
+    tracks_after_welcome: 2
+    tracks_between_episodes: 4
+    final_tracks: 10
+
+podcasts:
+    - key: 123_segundos
+        id: 4Z5CoK9UJq3ykgLbcBTQwP
+        name: 123 Segundos
+
+    - key: cafe_da_manha
+        id: 6WRTzGhq3uFxMrxHrHh1lo
+        name: Café da Manhã
+
+    - key: boletim_folha
+        id: 45PqwRAJBEOdNc28ijJnIz
+        name: Boletim Folha
+
+    - key: o_assunto
+        id: 4gkKyFdZzkv1eDnlTVrguk
+        name: O Assunto
+
+    - key: noticia_no_seu_tempo
+        id: 3M3xXhNXudIXGNSrjvoETG
+        name: Notícia no Seu Tempo
+
+    - key: panorama_cbn
+        id: 3mKy8vUlAHoLxZVaILsUWw
+        name: Panorama CBN
+
+    - key: resumao_diario
+        id: 7fzhxpt0RgWaLFYydsv2b4
+        name: Resumão Diário
+```
+
+The app reads secrets from `.env` and playlist-structure settings from `config.yaml`.
+If `config.yaml` is missing, it falls back to the defaults above.
+
 ### Step 4: Authenticate (First Time Only)
 
 ```bash
@@ -104,10 +145,10 @@ The workflow will automatically run daily at 9 AM GMT and update your playlist.
 
 ### Commands Reference
 
-| Command | What it does |
-| --------- | ------------- |
-| `uv run main` | Build/refresh the playlist now |
-| `uv run pytest` | Run tests |
+| Command         | What it does                   |
+| --------------- | ------------------------------ |
+| `uv run main`   | Build/refresh the playlist now |
+| `uv run pytest` | Run tests                      |
 
 ### Manual Playlist Update
 
@@ -135,38 +176,39 @@ uv run main
 
 ## 🎙️ Included Podcasts
 
-The system includes these Brazilian news podcasts by default (editable in playlist_service.py):
+The system includes these Brazilian news podcasts by default (editable in `config.yaml`):
 
-| Podcast | Description |
-| --------- | ------------ |
-| **123 Segundos** | Quick 2-minute news updates |
-| **Café da Manhã** | Morning briefing show |
-| **Boletim Folha** | Folha de S.Paulo news bulletin |
-| **O Assunto** | In-depth topic discussions |
-| **Notícia no Seu Tempo** | On-demand news updates |
-| **Panorama CBN** | CBN news overview |
-| **Resumão Diário** | Daily summary of important stories |
+| Podcast                  | Description                        |
+| ------------------------ | ---------------------------------- |
+| **123 Segundos**         | Quick 2-minute news updates        |
+| **Café da Manhã**        | Morning briefing show              |
+| **Boletim Folha**        | Folha de S.Paulo news bulletin     |
+| **O Assunto**            | In-depth topic discussions         |
+| **Notícia no Seu Tempo** | On-demand news updates             |
+| **Panorama CBN**         | CBN news overview                  |
+| **Resumão Diário**       | Daily summary of important stories |
 
 ## ⚙️ How It Works
 
 1. **Authentication:** OAuth 2.0 flow — you authorize once via browser, tokens are cached and auto-refresh on subsequent runs
-2. **Music Selection:** Fetches your top 23 tracks from Spotify, randomly choosing from short-term (~4 weeks), medium-term (~6 months), or long-term (all-time) listening habits
+2. **Music Selection:** Fetches your top tracks from Spotify, randomly choosing from short-term (~4 weeks), medium-term (~6 months), or long-term (all-time) listening habits
 3. **Podcast Episodes:** Retrieves the latest episode from each of the 7 subscribed podcasts
-4. **Playlist Building:** Constructs a structured list of URIs following the fixed pattern (track → episode → tracks → episode, etc.)
+4. **Playlist Building:** Constructs a structured list of URIs following the configurable pattern from `config.yaml`
 5. **Playlist Update:** Replaces the entire playlist contents via the Spotify API, or creates a new playlist if it doesn't exist
 6. **Playlist Image:** Uploads a custom cover image to personalize the playlist
 7. **Schedule:** Optionally runs automatically via GitHub Actions cron scheduler
 
 ## 🔧 Troubleshooting
 
-| Problem | Solution |
-| --------- | ---------- |
-| `Spotify credentials not found` | Create a .env file with `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, and `SPOTIFY_REDIRECT_URI` |
-| `Not authenticated!` | Run `uv run main` again to re-authenticate |
-| `403 Forbidden` | Add your Spotify email to User Management in your app's Settings on [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), then re-authenticate |
-| `404 Not Found (podcast)` | Verify the podcast IDs in playlist_service.py are correct |
-| Playlist is empty after running | Check the logs — podcasts may not have recent episodes available |
-| `OSError: [Errno 2] No such file or directory: '.cache'` | This is normal on first run — the cache file is created after initial authentication |
+| Problem                                                  | Solution                                                                                                                                                             |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Spotify credentials not found`                          | Create a .env file with `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, and `SPOTIFY_REDIRECT_URI`                                                                     |
+| Playlist structure looks wrong                           | Check `config.yaml` for `tracks_after_welcome`, `tracks_between_episodes`, and `final_tracks`                                                                        |
+| `Not authenticated!`                                     | Run `uv run main` again to re-authenticate                                                                                                                           |
+| `403 Forbidden`                                          | Add your Spotify email to User Management in your app's Settings on [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), then re-authenticate |
+| `404 Not Found (podcast)`                                | Verify the podcast IDs in playlist_service.py are correct                                                                                                            |
+| Playlist is empty after running                          | Check the logs — podcasts may not have recent episodes available                                                                                                     |
+| `OSError: [Errno 2] No such file or directory: '.cache'` | This is normal on first run — the cache file is created after initial authentication                                                                                 |
 
 ## 🤝 Contributing
 

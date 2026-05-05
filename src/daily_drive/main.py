@@ -10,46 +10,10 @@ from services.playlist_service import PlaylistService
 from services.podcast_service import PodcastService
 from services.user_service import UserService
 
-"""
-At 6AM GMT -3, every day, the playlist must have this structure:
-[
-    HOJE É {DIA DA SEMANA},
-    track,
-    SEGUNDOS_123_EPISODE,
-    track,
-    track,
-    CAFE_DA_MANHA_EPISODE,
-    track,
-    track,
-    BOLETIM_FOLHA_EPISODE,
-    track,
-    track,
-    O_ASSUNTO_EPISODE,
-    track,
-    track,
-    NOTICIA_NO_SEU_TEMPO_EPISODE,
-    track,
-    track,
-    PANORAMA_CBN_EPISODE,
-    track,
-    track,
-    RESUMAO_DIARIO_EPISODE,
-    track,
-    track,
-    track,
-    track,
-    track,
-    track,
-    track,
-    track,
-    track,
-    track
-]
-"""
-
 
 def _start_services(sp: spotipy.Spotify) -> tuple[PlaylistService, UserService, PodcastService]:
-    playlist_service = PlaylistService(sp)
+    settings = Settings()
+    playlist_service = PlaylistService(sp, settings.podcasts)
     user_service = UserService(sp)
     podcast_service = PodcastService(sp)
     return playlist_service, user_service, podcast_service
@@ -62,6 +26,7 @@ def _random_time_range() -> str:
 def main() -> None:
     log = setup_logger()
     settings = Settings()
+    tracks = []
 
     if not settings.spotify_client_id or not settings.spotify_client_secret:
         log.error("Spotify credentials not found.")
@@ -79,17 +44,31 @@ def main() -> None:
     playlist_service, user_service, podcast_service = _start_services(sp)
     log.info("Services initialized successfully.")
 
-    # Get top tracks
-    tracks = user_service.get_user_top_tracks(
-        time_range=_random_time_range(),
-        limit=23
-    )
+    for i in range(3):
+        # Get top tracks
+        tracks.extend(user_service.get_user_top_tracks(
+            time_range=_random_time_range(),
+            offset=i*50,
+            limit=50
+        ))
     shuffle(tracks)
     log.info(f"Retrieved {len(tracks)} top tracks for the user.")
 
+    required_track_count = PlaylistService.required_track_count(
+        len(settings.podcasts),
+        settings.daily_drive_tracks_after_welcome,
+        settings.daily_drive_tracks_between_episodes,
+        settings.daily_drive_final_tracks,
+    )
+    tracks = tracks[:required_track_count]
+    log.info(
+        f"Using {len(tracks)} tracks for the playlist structure "
+        f"(required={required_track_count})."
+    )
+
     # Get podcast episodes
     podcast_episodes = []
-    for podcast in playlist_service.PODCASTS.values():
+    for podcast in playlist_service.podcasts:
         episode = podcast_service.get_last_podcast_episode(podcast=podcast)
         if episode:
             podcast_episodes.append(episode)
@@ -101,7 +80,12 @@ def main() -> None:
 
     # Create/update daily drive playlist
     result = playlist_service.create_daily_drive_playlist(
-        tracks, podcast_episodes)
+        tracks,
+        podcast_episodes,
+        tracks_after_welcome=settings.daily_drive_tracks_after_welcome,
+        tracks_between_episodes=settings.daily_drive_tracks_between_episodes,
+        final_tracks=settings.daily_drive_final_tracks,
+    )
     log.info(result)
 
 

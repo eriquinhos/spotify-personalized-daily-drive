@@ -1,0 +1,27 @@
+daily_drive:
+    tracks_after_welcome: 2
+    tracks_between_episodes: 4
+    final_tracks: 10
+
+podcasts:
+    - key: "123_segundos"
+      id: "4Z5CoK9UJq3ykgLbcBTQwP"
+      name: "123 Segundos"
+    - key: "cafe_da_manha"
+      id: "6WRTzGhq3uFxMrxHrHh1lo"
+      name: "Café da Manhã"
+    - key: "boletim_folha"
+      id: "45PqwRAJBEOdNc28ijJnIz"
+      name: "Boletim Folha"
+    - key: "o_assunto"
+      id: "4gkKyFdZzkv1eDnlTVrguk"
+      name: "O Assunto"
+    - key: "noticia_no_seu_tempo"
+      id: "3M3xXhNXudIXGNSrjvoETG"
+      name: "Notícia no Seu Tempo"
+    - key: "panorama_cbn"
+      id: "3mKy8vUlAHoLxZVaILsUWw"
+      name: "Panorama CBN"
+    - key: "resumao_diario"
+      id: "7fzhxpt0RgWaLFYydsv2b4"
+      name: "Resumão Diário"

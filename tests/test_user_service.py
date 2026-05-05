@@ -15,7 +15,12 @@ class DummySP:
     def current_user(self):
         return self._user
 
-    def current_user_top_tracks(self, time_range: str = "short_term", limit: int = 20) -> dict:
+    def current_user_top_tracks(
+        self,
+        time_range: str = "short_term",
+        offset: int = 0,
+        limit: int = 20,
+    ) -> dict:
         return {
             "items": [
                 {
@@ -29,7 +34,12 @@ class DummySP:
             ]
         }
 
-    def current_user_top_artists(self, time_range: str = "short_term", limit: int = 20) -> dict:
+    def current_user_top_artists(
+        self,
+        time_range: str = "short_term",
+        offset: int = 0,
+        limit: int = 20,
+    ) -> dict:
         return {
             "items": [
                 {
@@ -70,6 +80,17 @@ class DummySP:
             ]
         }
 
+    def current_user_top_shows(self, time_range: str = "short_term", limit: int = 20) -> dict:
+        return {
+            "items": [
+                {
+                    "id": "s1",
+                    "name": "Show 1",
+                    "publisher": "Publisher 1",
+                }
+            ]
+        }
+
     def search(self, q: str, type: str, limit: int = 10, market: str = "BR") -> dict:  # noqa: A002
         return {
             "shows": {
@@ -100,6 +121,10 @@ def test_map_user_and_top_collections() -> None:
     assert len(playlists) == 1
     assert playlists[0].name == "My Playlist"
 
+    podcasts = svc.get_user_top_podcasts()
+    assert len(podcasts) == 1
+    assert podcasts[0].id == "s1"
+
 
 def test_map_album_empty() -> None:
     sp = DummySP()
@@ -107,3 +132,156 @@ def test_map_album_empty() -> None:
     alb = svc._map_album({})  # noqa: SLF001
     assert alb.id == ""
     assert alb.tracks == []
+
+
+def test_is_track_available_with_none() -> None:
+    sp = DummySP()
+    svc = UserService(sp)
+    # Should return True (fail-open) when track is None
+    assert svc.is_track_available(None) is True
+
+
+def test_is_track_available_with_empty_string() -> None:
+    sp = DummySP()
+    svc = UserService(sp)
+    # Should return True (fail-open) when track is empty string
+    assert svc.is_track_available("") is True
+
+
+def test_is_track_available_with_object_missing_id() -> None:
+    sp = DummySP()
+    svc = UserService(sp)
+
+    class FakeTrack:
+        pass
+
+    # Should return True (fail-open) when object has no id attribute
+    assert svc.is_track_available(FakeTrack()) is True
+
+
+def test_is_track_available_with_attribute_error() -> None:
+    sp = DummySP()
+    svc = UserService(sp)
+
+    class BrokenTrack:
+        @property
+        def id(self) -> None:
+            msg = "broken id property"
+            raise AttributeError(msg)
+
+    # Should return True (fail-open) when accessing id raises AttributeError
+    assert svc.is_track_available(BrokenTrack()) is True
+
+
+def test_is_track_available_with_sp_error() -> None:
+    class SPWithError:
+        def track(self, track_id: str) -> None:
+            import spotipy
+
+            raise spotipy.SpotifyException(400, -1, "error")
+
+    svc = UserService(SPWithError())
+    # Should return False when Spotify API returns error
+    assert svc.is_track_available("t1") is False
+
+
+def test_filter_available_tracks_with_broken_track() -> None:
+    sp = DummySP()
+    svc = UserService(sp)
+
+    class BrokenTrack:
+        def __getattribute__(self, name: str):
+            msg = "broken"
+            if name == "id":
+                raise AttributeError(msg)
+            return super().__getattribute__(name)
+
+    # Should not crash and put broken track in available (fail-open)
+    available, unavailable = svc.filter_available_tracks([BrokenTrack()])
+    assert len(available) == 1
+    assert len(unavailable) == 0
+
+
+def test_filter_available_tracks_handles_exception_from_is_track_available() -> None:
+    sp = DummySP()
+    svc = UserService(sp)
+
+    # Create a track that will cause is_track_available to raise an exception
+    class ProblematicTrack:
+        id = "t1"
+
+    # Patch is_track_available to raise ValueError
+    original_is_available = svc.is_track_available
+
+    def broken_is_available(track: object) -> bool:
+        msg = "problem"
+        if isinstance(track, ProblematicTrack):
+            raise TypeError(msg)
+        return original_is_available(track)
+
+    svc.is_track_available = broken_is_available
+
+    # The filter should catch the exception and put the track in available (fail-open)
+    available, unavailable = svc.filter_available_tracks([ProblematicTrack()])
+    assert len(available) == 1
+    assert len(unavailable) == 0
+
+
+def test_is_track_available_raises_attribute_error_on_id_access() -> None:
+    sp = DummySP()
+    svc = UserService(sp)
+
+    # Create a track where id property raises AttributeError
+    class TrackWithBadId:
+        @property
+        def id(self) -> None:
+            msg = "cannot access id"
+            raise AttributeError(msg)
+
+    # Should return True (fail-open) when accessing track.id raises AttributeError
+    assert svc.is_track_available(TrackWithBadId()) is True
+
+
+def test_is_track_available_with_available_markets_empty() -> None:
+    # Test when track has empty available_markets list
+    class SPWithMarkets:
+        def track(self, track_id: str) -> dict:
+            return {
+                "id": "t1",
+                "name": "Track",
+                "available_markets": [],
+                "is_playable": False,
+            }
+
+    svc = UserService(SPWithMarkets())
+    # Should return False since is_playable is False
+    assert svc.is_track_available("t1") is False
+
+
+def test_is_track_available_with_available_markets_nonempty() -> None:
+    # Test when track has non-empty available_markets list
+    class SPWithMarkets:
+        def track(self, track_id: str) -> dict:
+            return {
+                "id": "t1",
+                "name": "Track",
+                "available_markets": ["US", "BR"],
+            }
+
+    svc = UserService(SPWithMarkets())
+    # Should return True since available_markets is non-empty
+    assert svc.is_track_available("t1") is True
+
+
+def test_is_track_available_with_unknown_track_format() -> None:
+    # Test when track dict has no is_playable and no available_markets
+    class SPWithUnknown:
+        def track(self, track_id: str) -> dict:
+            return {
+                "id": "t1",
+                "name": "Track",
+            }
+
+    svc = UserService(SPWithUnknown())
+    # Should return True (fail-open assumption)
+    assert svc.is_track_available("t1") is True

@@ -1,7 +1,6 @@
 import base64
 from datetime import datetime
 from pathlib import Path
-from typing import ClassVar
 
 import spotipy
 
@@ -15,59 +14,55 @@ from services.user_service import UserService
 
 
 class PlaylistService:
-    # Podcasts da Daily Drive
-    PODCASTS: ClassVar[dict] = {
-        "123_segundos": Podcast(
-            id="4Z5CoK9UJq3ykgLbcBTQwP",
-            key="123_segundos",
-            name="123 Segundos"
-        ),
-        "cafe_da_manha": Podcast(
-            id="6WRTzGhq3uFxMrxHrHh1lo",
-            key="cafe_da_manha",
-            name="Café da Manhã"
-        ),
-        "boletim_folha": Podcast(
-            id="45PqwRAJBEOdNc28ijJnIz",
-            key="boletim_folha",
-            name="Boletim Folha"
-        ),
-        "o_assunto": Podcast(
-            id="4gkKyFdZzkv1eDnlTVrguk",
-            key="o_assunto",
-            name="O Assunto"
-        ),
-        "noticia_no_seu_tempo": Podcast(
-            id="3M3xXhNXudIXGNSrjvoETG",
-            key="noticia_no_seu_tempo",
-            name="Notícia no Seu Tempo"
-        ),
-        "panorama_cbn": Podcast(
-            id="3mKy8vUlAHoLxZVaILsUWw",
-            key="panorama_cbn",
-            name="Panorama CBN"
-        ),
-        "resumao_diario": Podcast(
-            id="7fzhxpt0RgWaLFYydsv2b4",
-            key="resumao_diario",
-            name="Resumão Diário"
-        ),
-    }
-
-    # Ordem dos podcasts na playlist (conforme estrutura comentada)
-    PODCAST_ORDER: ClassVar[list] = [
-        "4Z5CoK9UJq3ykgLbcBTQwP",           # 123_segundos
-        "6WRTzGhq3uFxMrxHrHh1lo",           # cafe_da_manha
-        "45PqwRAJBEOdNc28ijJnIz",           # boletim_folha
-        "4gkKyFdZzkv1eDnlTVrguk",           # o_assunto
-        "3M3xXhNXudIXGNSrjvoETG",           # noticia_no_seu_tempo
-        "3mKy8vUlAHoLxZVaILsUWw",           # panorama_cbn
-        "7fzhxpt0RgWaLFYydsv2b4",           # resumao_diario
-    ]
-
-    def __init__(self, sp: spotipy.Spotify) -> None:
+    def __init__(self, sp: spotipy.Spotify, podcasts: list[Podcast] | None = None) -> None:
         self.sp = sp
-        self.user_service = UserService(self.sp)
+        self.user_service = UserService(self.sp) if sp else None
+        if podcasts:
+            self.podcasts = list(podcasts)
+        elif sp:
+            # If no podcasts provided via config, try to fetch user's top podcasts
+            try:
+                self.podcasts = self.user_service.get_user_top_podcasts(
+                    limit=5)
+            except (AttributeError, spotipy.SpotifyException, TypeError):
+                # If the SP client is missing methods or Spotify errors, fall back to empty list
+                self.podcasts = []
+        else:
+            self.podcasts = []
+        self.podcast_order = [podcast.id for podcast in self.podcasts]
+
+    @classmethod
+    def required_track_count(cls, *args: int) -> int:
+        """Calculate required number of tracks for the daily drive structure.
+
+        Supports two call styles for backward compatibility:
+        - required_track_count(tracks_after_welcome, tracks_between_episodes, final_tracks)-> uses default
+        podcast count (5)
+        - required_track_count(podcast_count, tracks_after_welcome, tracks_between_episodes, final_tracks)-> uses the
+        explicit podcast_count
+        """
+
+        if len(args) == 3:
+            tracks_after_welcome, tracks_between_episodes, final_tracks = args
+            # Default to 5 podcasts when caller omits podcast_count
+            podcast_count = 5
+        elif len(args) == 4:
+            podcast_count, tracks_after_welcome, tracks_between_episodes, final_tracks = args
+        else:
+            msg = (
+                "required_track_count() takes either 3 or 4 positional "
+                "arguments"
+            )
+            raise TypeError(msg)
+
+        if podcast_count <= 0:
+            return tracks_after_welcome + final_tracks
+
+        return (
+            tracks_after_welcome
+            + (podcast_count - 1) * tracks_between_episodes
+            + final_tracks
+        )
 
     def _check_existing_playlist(self, user: User, name: str) -> str | None:
         user_playlists = self.user_service.get_user_playlists(limit=100)
@@ -92,8 +87,6 @@ class PlaylistService:
         except spotipy.SpotifyException as e:
             return f"Error adding episodes to playlist: {e}"
 
-    import base64
-
     def _add_image_to_playlist(self, playlist_id: str, image_path: str) -> str:
         try:
             with open(image_path, "rb") as img_file:
@@ -108,12 +101,38 @@ class PlaylistService:
         else:
             return f"Image '{image_path}' uploaded successfully to playlist ID: {playlist_id}"
 
-    def _build_structured_uris(
+    @staticmethod
+    def _append_track_uris(
+        structured_uris: list[str],
+        track_uris: list[str],
+        track_index: int,
+        count: int,
+    ) -> int:
+        for _ in range(count):
+            if track_index >= len(track_uris):
+                break
+            structured_uris.append(track_uris[track_index])
+            track_index += 1
+        return track_index
+
+    @staticmethod
+    def _append_episode_uri(
+        structured_uris: list[str],
+        episodes_by_podcast: dict,
+        podcast_id: str,
+    ) -> None:
+        if episodes := episodes_by_podcast.get(podcast_id):
+            structured_uris.append(episodes.pop(0).uri)
+
+    def build_structured_uris(
         self,
         tracks: list[Track],
         episodes: list[Episode],
         episodes_by_podcast: dict,
         welcome_uri: str | None = None,
+        tracks_after_welcome: int = 2,
+        tracks_between_episodes: int = 4,
+        final_tracks: int = 10,
     ) -> list[str]:
         """Build the ordered list of URIs following the daily drive structure.
 
@@ -127,29 +146,27 @@ class PlaylistService:
         if welcome_uri:
             structured_uris.append(welcome_uri)
 
-        # Primeiro: 1 track + 1 episode
-        if track_index < len(track_uris):
-            structured_uris.append(track_uris[track_index])
-            track_index += 1
+        track_index = self._append_track_uris(
+            structured_uris,
+            track_uris,
+            track_index,
+            tracks_after_welcome,
+        )
 
-        first_podcast = self.PODCAST_ORDER[0]
-        if episodes := episodes_by_podcast.get(first_podcast):
-            structured_uris.append(episodes.pop(0).uri)
+        for podcast_index, podcast_id in enumerate(self.podcast_order):
+            self._append_episode_uri(
+                structured_uris, episodes_by_podcast, podcast_id)
 
-        # Blocos restantes: 2 tracks + 1 episode
-        for podcast_id in self.PODCAST_ORDER[1:]:
-            for _ in range(2):
-                if track_index < len(track_uris):
-                    structured_uris.append(track_uris[track_index])
-                    track_index += 1
+            if podcast_index < len(self.podcast_order) - 1:
+                track_index = self._append_track_uris(
+                    structured_uris,
+                    track_uris,
+                    track_index,
+                    tracks_between_episodes,
+                )
 
-            if episodes := episodes_by_podcast.get(podcast_id):
-                structured_uris.append(episodes.pop(0).uri)
-
-        # Adicionar tracks restantes
-        while track_index < len(track_uris):
-            structured_uris.append(track_uris[track_index])
-            track_index += 1
+        self._append_track_uris(
+            structured_uris, track_uris, track_index, final_tracks)
 
         return structured_uris
 
@@ -157,11 +174,14 @@ class PlaylistService:
         self,
         playlist: Playlist,
         tracks: list[Track],
-        episodes: list[Episode]
+        episodes: list[Episode],
+        tracks_after_welcome: int = 2,
+        tracks_between_episodes: int = 4,
+        final_tracks: int = 10,
     ) -> str:
         """
         Add tracks and episodes to playlist following the daily drive structure.
-        Structure: 1 track, SEGUNDOS_123 episode, 2 tracks, CAFE_DA_MANHA episode, ...
+        Structure is configurable through track counts around each podcast block.
         """
         # Mapear episodes por podcast.id
         episodes_by_podcast = {}
@@ -171,30 +191,40 @@ class PlaylistService:
                 episodes_by_podcast[podcast_id] = []
             episodes_by_podcast[podcast_id].append(episode)
 
-        welcome_uri: str | None = None
-        sp_client = getattr(self, "sp", None)
-        if sp_client and hasattr(sp_client, "album_tracks") and hasattr(sp_client, "album"):
-            try:
-                welcome_tracks = self.get_spotify_daily_drive_welcome_tracks()
-                if welcome_tracks:
-                    # datetime.weekday(): Monday=0 .. Sunday=6
-                    # The album ordering appears to be Sunday..Saturday so shift by +1
-                    weekday = datetime.now().weekday()
-                    welcome_index = (weekday + 1) % 7
-                    if 0 <= welcome_index < len(welcome_tracks):
-                        welcome_uri = welcome_tracks[welcome_index].uri
-            except spotipy.SpotifyException:
-                # If Spotify API call fails, continue without a welcome track
-                welcome_uri = None
+        # Filter out unavailable tracks early so we don't try to add them to playlists.
+        try:
+            available_tracks, unavailable_tracks = self.user_service.filter_available_tracks(
+                tracks
+            )
+        except (AttributeError, TypeError, ValueError):
+            # If filtering fails for any reason (mocks, limited SP client), fall back to original list
+            available_tracks, unavailable_tracks = tracks, []
 
-        structured_uris = self._build_structured_uris(
-            tracks, episodes, episodes_by_podcast, welcome_uri=welcome_uri)
+        welcome_uri: str | None = None
+        welcome_uri = self._get_welcome_uri()
+
+        structured_uris = self.build_structured_uris(
+            available_tracks,
+            episodes,
+            episodes_by_podcast,
+            welcome_uri=welcome_uri,
+            tracks_after_welcome=tracks_after_welcome,
+            tracks_between_episodes=tracks_between_episodes,
+            final_tracks=final_tracks,
+        )
 
         try:
             self.sp.playlist_add_items(playlist.id, structured_uris)
-            return f"Added {len(tracks)} tracks and {len(episodes)} episodes to playlist '{playlist.name}'."
         except spotipy.SpotifyException as e:
             return f"Error adding content to playlist: {e}"
+        else:
+            msg = (
+                f"Added {len(available_tracks)} tracks and {len(episodes)} "
+                f"episodes to playlist '{playlist.name}'."
+            )
+            if unavailable_tracks:
+                msg += f" Skipped {len(unavailable_tracks)} unavailable tracks."
+            return msg
 
     def _refresh_existing_playlist(
         self,
@@ -222,7 +252,14 @@ class PlaylistService:
         except spotipy.SpotifyException as e:
             return f"Error refreshing playlist: {e}"
 
-    def create_daily_drive_playlist(self, tracks: list[Track], episodes: list[Episode]) -> str:
+    def create_daily_drive_playlist(
+        self,
+        tracks: list[Track],
+        episodes: list[Episode],
+        tracks_after_welcome: int = 2,
+        tracks_between_episodes: int = 4,
+        final_tracks: int = 10,
+    ) -> str:
         root_path = Path(__file__).parents[1]
         image_path = root_path / "daily_drive" / \
             "assets" / "images" / "daily_drive.jpg"
@@ -248,7 +285,13 @@ class PlaylistService:
             )
             self._add_image_to_playlist(playlist_data["id"], str(image_path))
             self._add_structured_content_to_playlist(
-                playlist, tracks, episodes)
+                playlist,
+                tracks,
+                episodes,
+                tracks_after_welcome=tracks_after_welcome,
+                tracks_between_episodes=tracks_between_episodes,
+                final_tracks=final_tracks,
+            )
             return f"Playlist '{playlist_name}' created successfully with ID: {playlist_data['id']}"
         except spotipy.SpotifyException as e:
             return f"Error creating playlist: {e}"
@@ -300,3 +343,24 @@ class PlaylistService:
                 )
             )
         return mapped_tracks
+
+    def _get_welcome_uri(self) -> str | None:
+        sp_client = getattr(self, "sp", None)
+        if not sp_client or not hasattr(sp_client, "album_tracks") or not hasattr(sp_client, "album"):
+            return None
+
+        try:
+            welcome_tracks = self.get_spotify_daily_drive_welcome_tracks()
+            if not welcome_tracks:
+                return None
+
+            # datetime.weekday(): Monday=0 .. Sunday=6
+            # The album ordering appears to be Sunday..Saturday so shift by +1
+            weekday = datetime.now().weekday()
+            welcome_index = (weekday + 1) % 7
+            if 0 <= welcome_index < len(welcome_tracks):
+                return welcome_tracks[welcome_index].uri
+        except spotipy.SpotifyException:
+            return None
+
+        return None

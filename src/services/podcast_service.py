@@ -9,6 +9,44 @@ class PodcastService:
     def __init__(self, sp: spotipy.Spotify) -> None:
         self.sp = sp
 
+    @staticmethod
+    def load_podcasts_from_config(yaml_config: dict | None = None) -> list[Podcast]:
+        """Load podcasts from a YAML config dict.
+
+        Returns an empty list when the YAML is missing or invalid. Consumers
+        may decide to fall back to user-top podcasts when no config is provided.
+        """
+        raw_podcasts = None
+        if isinstance(yaml_config, dict):
+            raw_podcasts = yaml_config.get(
+                "podcasts") if "podcasts" in yaml_config else None
+
+        if not isinstance(raw_podcasts, list) or not raw_podcasts:
+            return []
+
+        podcasts: list[Podcast] = []
+        for raw_podcast in raw_podcasts:
+            if not isinstance(raw_podcast, dict):
+                continue
+
+            podcast_id = str(raw_podcast.get("id", "")).strip()
+            podcast_name = str(raw_podcast.get("name", "")).strip()
+            podcast_key = str(raw_podcast.get(
+                "key", podcast_id or podcast_name)).strip()
+            if not podcast_id or not podcast_name:
+                continue
+
+            podcasts.append(
+                Podcast(
+                    id=podcast_id,
+                    key=podcast_key,
+                    name=podcast_name,
+                    publisher=raw_podcast.get("publisher"),
+                )
+            )
+
+        return podcasts
+
     def _get_best_podcast(
         self,
         podcasts: list[dict],
@@ -78,20 +116,6 @@ class PodcastService:
             )
 
         return episodes
-
-    def get_user_top_podcasts(self, time_range: str = "short_term", limit: int = 20) -> list[Podcast]:
-        top_podcasts = self.sp.current_user_top_shows(
-            time_range=time_range, limit=limit)
-        items = top_podcasts.get("items", [])
-        return [
-            Podcast(
-                id=item["id"],
-                key=item["name"],
-                name=item["name"],
-                publisher=item.get("publisher"),
-            )
-            for item in items
-        ]
 
     def find_podcast_by_name(self, name: str, publishers: list[str], market: str = "BR") -> Podcast | None:
         search = self.sp.search(

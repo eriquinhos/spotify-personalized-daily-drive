@@ -87,27 +87,13 @@ def test_get_best_podcast_contains_branch() -> None:
     assert (p is None) or isinstance(p, Podcast)
 
 
-def test_get_user_top_podcasts_and_find_no_results() -> None:
+def test_find_podcast_by_name_no_results() -> None:
     class SP:
-        def current_user_top_shows(self, time_range: str = "short_term", limit: int = 20) -> dict:
-            return {
-                "items": [
-                    {
-                        "id": "s1",
-                        "name": "Show 1",
-                        "publisher": "P1",
-                    }
-                ]
-            }
-
         def search(self, q: str, type: str, limit: int = 10, market: str = "BR") -> dict:  # noqa: A002
             return {"shows": {"items": []}}
 
     sp = SP()
     svc = PodcastService(sp)
-    top = svc.get_user_top_podcasts()
-    assert len(top) == 1 and top[0].id == "s1"
-
     none = svc.find_podcast_by_name("Nope", ["X"])
     assert none is None
 
@@ -136,3 +122,71 @@ def test_get_best_podcast_publisher_boost_returns() -> None:
     ]
     p = svc._get_best_podcast(podcasts, "Exact Match", ["Publisher"])  # noqa: SLF001
     assert isinstance(p, Podcast)
+
+
+def test_load_podcasts_from_config_with_none() -> None:
+    # Test with None input
+    podcasts = PodcastService.load_podcasts_from_config(None)
+    assert podcasts == []
+
+
+def test_load_podcasts_from_config_with_empty_dict() -> None:
+    # Test with empty dict
+    podcasts = PodcastService.load_podcasts_from_config({})
+    assert podcasts == []
+
+
+def test_load_podcasts_from_config_with_non_list_podcasts() -> None:
+    # Test when "podcasts" key is not a list
+    podcasts = PodcastService.load_podcasts_from_config(
+        {"podcasts": "not a list"})
+    assert podcasts == []
+
+
+def test_load_podcasts_from_config_with_invalid_podcast_items() -> None:
+    # Test when podcast items are not dicts
+    podcasts = PodcastService.load_podcasts_from_config(
+        {"podcasts": ["not a dict", 123]}
+    )
+    assert podcasts == []
+
+
+def test_load_podcasts_from_config_skips_incomplete_items() -> None:
+    # Test when some podcasts are missing required fields
+    podcasts = PodcastService.load_podcasts_from_config(
+        {
+            "podcasts": [
+                {"id": "p1", "name": "Pod 1"},  # valid
+                {"id": "p2"},  # missing name
+                {"name": "Pod 3"},  # missing id
+            ]
+        }
+    )
+    assert len(podcasts) == 1
+    assert podcasts[0].name == "Pod 1"
+
+
+def test_get_podcast_episodes_with_invalid_items() -> None:
+    # Test _get_podcast_episodes with items lacking id or being None
+    class SPWithInvalidEpisodes:
+        def show_episodes(self, podcast_id: str, limit: int = 5) -> dict:
+            return {
+                "items": [
+                    None,  # None item
+                    {"name": "Episode", "uri": "uri1"},  # missing id
+                    {
+                        "id": "e1",
+                        "name": "Valid Episode",
+                        "uri": "uri2",
+                        "release_date": "2024-01-01",
+                        "external_urls": {"spotify": "url1"},
+                    },  # valid
+                ]
+            }
+
+    svc = PodcastService(SPWithInvalidEpisodes())
+    podcast = Podcast(id="p1", key="p1", name="Pod1")
+    episodes = svc._get_podcast_episodes(podcast, limit=5)  # noqa: SLF001
+    # Should only return the valid episode
+    assert len(episodes) == 1
+    assert episodes[0].id == "e1"
