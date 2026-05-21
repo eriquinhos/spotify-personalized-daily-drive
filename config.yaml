@@ -1,6 +1,6 @@
 daily_drive:
-    tracks_after_welcome: 2
-    tracks_between_episodes: 4
+    tracks_after_welcome: 1
+    tracks_between_episodes: 2
     final_tracks: 10
 
 podcasts:
