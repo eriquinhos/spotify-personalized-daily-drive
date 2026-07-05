@@ -230,7 +230,10 @@ class PlaylistService:
         self,
         playlist_id: str,
         tracks: list[Track],
-        episodes: list[Episode]
+        episodes: list[Episode],
+        tracks_after_welcome: int = 2,
+        tracks_between_episodes: int = 4,
+        final_tracks: int = 10,
     ) -> str:
         root_path = Path(__file__).parents[1]
         image_path = root_path / "daily_drive" / \
@@ -248,7 +251,14 @@ class PlaylistService:
                 uri=playlist_data["uri"],
                 url=playlist_data["external_urls"]["spotify"]
             )
-            return self._add_structured_content_to_playlist(playlist, tracks, episodes)
+            return self._add_structured_content_to_playlist(
+                playlist,
+                tracks,
+                episodes,
+                tracks_after_welcome=tracks_after_welcome,
+                tracks_between_episodes=tracks_between_episodes,
+                final_tracks=final_tracks,
+            )
         except spotipy.SpotifyException as e:
             return f"Error refreshing playlist: {e}"
 
@@ -269,7 +279,14 @@ class PlaylistService:
             user, playlist_name)
 
         if existing_playlist_id:
-            return self._refresh_existing_playlist(existing_playlist_id, tracks, episodes)
+            return self._refresh_existing_playlist(
+                existing_playlist_id,
+                tracks,
+                episodes,
+                tracks_after_welcome=tracks_after_welcome,
+                tracks_between_episodes=tracks_between_episodes,
+                final_tracks=final_tracks,
+            )
 
         try:
             playlist_data = self.sp.user_playlist_create(
