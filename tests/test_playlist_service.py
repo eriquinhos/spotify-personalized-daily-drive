@@ -198,7 +198,7 @@ def test_refresh_existing_playlist_and_create_flow(monkeypatch: object) -> None:
     monkeypatch.setattr(
         PlaylistService,
         "_add_structured_content_to_playlist",
-        lambda self, playlist, tracks, episodes: "structured ok",
+        lambda self, playlist, tracks, episodes, **kwargs: "structured ok",
     )
 
     tracks = []
@@ -214,13 +214,34 @@ def test_refresh_existing_playlist_and_create_flow(monkeypatch: object) -> None:
             return [type("P", (), {"name": "Personal Daily Drive", "id": "pl1"})]
 
     svc.user_service = DummyUserService()
+    captured = {}
+
+    def fake_refresh(self, pid, t, e, *, tracks_after_welcome=2, tracks_between_episodes=4, final_tracks=10):
+        captured.update(
+            tracks_after_welcome=tracks_after_welcome,
+            tracks_between_episodes=tracks_between_episodes,
+            final_tracks=final_tracks,
+        )
+        return "refreshed"
+
     monkeypatch.setattr(
         PlaylistService,
         "_refresh_existing_playlist",
-        lambda self, pid, t, e: "refreshed",
+        fake_refresh,
     )
-    out = svc.create_daily_drive_playlist([], [])
+    out = svc.create_daily_drive_playlist(
+        [],
+        [],
+        tracks_after_welcome=1,
+        tracks_between_episodes=2,
+        final_tracks=9,
+    )
     assert out == "refreshed"
+    assert captured == {
+        "tracks_after_welcome": 1,
+        "tracks_between_episodes": 2,
+        "final_tracks": 9,
+    }
 
 
 def test_add_image_upload_success(monkeypatch: object, tmp_path: object) -> None:
@@ -465,7 +486,7 @@ def test_refresh_existing_playlist_handles_spotify_exception() -> None:
             raise spotipy.SpotifyException(400, -1, "bad")
 
     svc = PlaylistService(SP())
-    out = svc._refresh_existing_playlist("pl1", [], [])  # noqa: SLF001
+    out = svc._refresh_existing_playlist("pl1", [], [], 1, 2, 3)  # noqa: SLF001
     assert out.startswith("Error refreshing playlist")
 
 
