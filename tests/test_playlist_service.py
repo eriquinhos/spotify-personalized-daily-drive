@@ -216,7 +216,16 @@ def test_refresh_existing_playlist_and_create_flow(monkeypatch: object) -> None:
     svc.user_service = DummyUserService()
     captured = {}
 
-    def fake_refresh(self, pid, t, e, *, tracks_after_welcome=2, tracks_between_episodes=4, final_tracks=10):
+    def fake_refresh(
+        self: PlaylistService,
+        pid: str,
+        t: list[Track],
+        e: list[Episode],
+        *,
+        tracks_after_welcome: int = 2,
+        tracks_between_episodes: int = 4,
+        final_tracks: int = 10,
+    ) -> str:
         captured.update(
             tracks_after_welcome=tracks_after_welcome,
             tracks_between_episodes=tracks_between_episodes,
